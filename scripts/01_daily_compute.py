@@ -139,11 +139,17 @@ print("\n--- Running Janitor ---")
 cutoff_date = end_dt - pd.Timedelta(days=DAYS_TO_KEEP)
 
 for nc_file in glob.glob("data_cache/diff_*.nc"):
-    file_date_str = nc_file.split('_')[1].replace('.nc', '')
-    file_date = pd.to_datetime(file_date_str)
+    # Extract just the filename (e.g., "diff_2026-07-28.nc") ignoring the folder path
+    basename = os.path.basename(nc_file)
+    # Strip away the prefix and suffix to isolate the date
+    file_date_str = basename.replace('diff_', '').replace('.nc', '')
     
-    if file_date <= cutoff_date:
-        os.remove(nc_file)
-        print(f"Deleted old archive: {nc_file}")
+    try:
+        file_date = pd.to_datetime(file_date_str)
+        if file_date <= cutoff_date:
+            os.remove(nc_file)
+            print(f"Deleted old archive: {nc_file}")
+    except Exception as e:
+        print(f"Skipping {nc_file}: {e}")
         
 print("Daily Collector finished!")
