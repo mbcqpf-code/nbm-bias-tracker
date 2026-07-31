@@ -102,7 +102,8 @@ for d in range(DAYS_TO_KEEP):
             nbm_var = list(ds_nbm.data_vars)[0]
             nbm_tmax_f = (ds_nbm[nbm_var] - 273.15) * 9/5 + 32
             
-            diff_array = nbm_tmax_f.values - urma_tmax_f.values
+            # Calculate difference and cast to float32 to save space
+            diff_array = (nbm_tmax_f.values - urma_tmax_f.values).astype(np.float32)
             daily_diffs[f'lead_{lead}'] = (['y', 'x'], diff_array)
             
             ds_nbm.close()
@@ -114,14 +115,15 @@ for d in range(DAYS_TO_KEEP):
             
         except Exception as e:
             print(f"  [!] Day {lead} missing: {e}")
-            daily_diffs[f'lead_{lead}'] = (['y', 'x'], np.full(urma_tmax_f.shape, np.nan))
+            # Ensure the NaN array is also cast as float32
+            daily_diffs[f'lead_{lead}'] = (['y', 'x'], np.full(urma_tmax_f.shape, np.nan, dtype=np.float32))
 
-    # 4. Save to NetCDF (With Compression)
+    # 4. Save to NetCDF (With Compression and Float32 downcasting for coordinates)
     ds_out = xr.Dataset(
         data_vars=daily_diffs,
         coords={
-            'latitude': (['y', 'x'], ds_urma.latitude.values),
-            'longitude': (['y', 'x'], ds_urma.longitude.values)
+            'latitude': (['y', 'x'], ds_urma.latitude.values.astype(np.float32)),
+            'longitude': (['y', 'x'], ds_urma.longitude.values.astype(np.float32))
         }
     )
     
@@ -139,7 +141,7 @@ print("\n--- Running Janitor ---")
 cutoff_date = end_dt - pd.Timedelta(days=DAYS_TO_KEEP)
 
 for nc_file in glob.glob("data_cache/diff_*.nc"):
-    # Extract just the filename (e.g., "diff_2026-07-28.nc") ignoring the folder path
+    # Extract just the filename ignoring the folder path
     basename = os.path.basename(nc_file)
     # Strip away the prefix and suffix to isolate the date
     file_date_str = basename.replace('diff_', '').replace('.nc', '')
