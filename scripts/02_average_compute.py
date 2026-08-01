@@ -26,8 +26,12 @@ all_files = sorted(glob.glob("data_cache/diff_*.nc"), reverse=True)
 if not all_files:
     raise FileNotFoundError("No NetCDF files found in data_cache/. Run 01_daily_compute.py first.")
 
-latest_date_str = os.path.basename(all_files[0]).replace('diff_', '').replace('.nc', '')
-print(f"Most recent dataset date: {latest_date_str}")
+# Extract the URMA run date from the file, then subtract 1 day for the valid weather date
+latest_file_date_str = os.path.basename(all_files[0]).replace('diff_', '').replace('.nc', '')
+valid_date = pd.to_datetime(latest_file_date_str) - pd.Timedelta(days=1)
+valid_date_str = valid_date.strftime('%Y-%m-%d')
+
+print(f"Most recent dataset date: {latest_file_date_str} (Valid for temps on {valid_date_str})")
 
 with xr.open_dataset(all_files[0]) as ds_ref:
     lats = ds_ref.latitude.values
@@ -36,7 +40,7 @@ with xr.open_dataset(all_files[0]) as ds_ref:
 # ==============================================================================
 # Plotting Helper
 # ==============================================================================
-def plot_bias_map(avg_bias_grid, lead_day, window_days, n_samples, end_date_str, var_label, output_path):
+def plot_bias_map(avg_bias_grid, lead_day, window_days, n_samples, valid_date_str, var_label, output_path):
     fig = plt.figure(figsize=(12, 6))
     ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
     
@@ -53,9 +57,11 @@ def plot_bias_map(avg_bias_grid, lead_day, window_days, n_samples, end_date_str,
     )
     
     lead_hours = lead_day * 24
+    
+    # Updated title to reflect the actual valid weather date
     ax.set_title(
         f"NBM Day {lead_day} (+{lead_hours}h) {var_label} Average Bias (°F)\n"
-        f"{window_days}-Day Window Ending {end_date_str} (N={n_samples})",
+        f"{window_days}-Day Window Valid Through {valid_date_str} (N={n_samples})",
         fontsize=13, fontweight='bold', pad=10
     )
     
@@ -107,7 +113,7 @@ for window in WINDOWS:
                 lead_day=lead,
                 window_days=window,
                 n_samples=len(grid_stack),
-                end_date_str=latest_date_str,
+                valid_date_str=valid_date_str,
                 var_label=var_label,
                 output_path=out_path
             )
