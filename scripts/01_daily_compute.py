@@ -85,23 +85,27 @@ for d in range(DAYS_TO_KEEP):
         
     print(f"\n[{date_str}] -> Missing. Starting processing...")
     
-    # 2. Download URMA
     urma_maxt_dt = f"{date_str} 08:00"
     urma_mint_dt = f"{date_str} 20:00"
-    urma_dpt_dt = f"{valid_date_str} 21:00" # 21z on the valid weather day
+    urma_dpt_dt = f"{valid_date_str} 21:00"
     
     try:
+        # THE FIX: We apply .squeeze().values[::2, ::2] to downsample to 5km resolution!
         H_urma_max = Herbie(urma_maxt_dt, model="urma", product="anl")
         ds_urma_max = H_urma_max.xarray(":TMAX:2 m above ground:", remove_grib=False)
-        urma_tmax_f = (ds_urma_max[list(ds_urma_max.data_vars)[0]] - 273.15) * 9/5 + 32
+        urma_tmax_f = (ds_urma_max[list(ds_urma_max.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
         
         H_urma_min = Herbie(urma_mint_dt, model="urma", product="anl")
         ds_urma_min = H_urma_min.xarray(":TMIN:2 m above ground:", remove_grib=False)
-        urma_tmin_f = (ds_urma_min[list(ds_urma_min.data_vars)[0]] - 273.15) * 9/5 + 32
+        urma_tmin_f = (ds_urma_min[list(ds_urma_min.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
 
         H_urma_dpt = Herbie(urma_dpt_dt, model="urma", product="anl")
         ds_urma_dpt = H_urma_dpt.xarray(":DPT:2 m above ground:", remove_grib=False)
-        urma_tdpt_f = (ds_urma_dpt[list(ds_urma_dpt.data_vars)[0]] - 273.15) * 9/5 + 32
+        urma_tdpt_f = (ds_urma_dpt[list(ds_urma_dpt.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+        
+        # Subsample the coordinate grids too
+        lat_grid = ds_urma_max.latitude.squeeze().values[::2, ::2].astype(np.float32)
+        lon_grid = ds_urma_max.longitude.squeeze().values[::2, ::2].astype(np.float32)
         
     except Exception as e:
         print(f"  [!] URMA failed for {date_str}: {e}. Skipping day.")
@@ -121,8 +125,8 @@ for d in range(DAYS_TO_KEEP):
         # Max T
         try:
             ds_nbm_max, temp_grib_max = get_nbm_qmd(init_dt_str, lead_hours_max, 'max')
-            nbm_tmax_f = (ds_nbm_max[list(ds_nbm_max.data_vars)[0]] - 273.15) * 9/5 + 32
-            daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], (nbm_tmax_f.values - urma_tmax_f.values).astype(np.float32))
+            nbm_tmax_f = (ds_nbm_max[list(ds_nbm_max.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+            daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], (nbm_tmax_f - urma_tmax_f).astype(np.float32))
             ds_nbm_max.close()
             for f in glob.glob(f"{temp_grib_max}*"): os.remove(f)
         except Exception: daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], np.full(urma_tmax_f.shape, np.nan, dtype=np.float32))
@@ -130,8 +134,8 @@ for d in range(DAYS_TO_KEEP):
         # Min T
         try:
             ds_nbm_min, temp_grib_min = get_nbm_qmd(init_dt_str, lead_hours_min, 'min')
-            nbm_tmin_f = (ds_nbm_min[list(ds_nbm_min.data_vars)[0]] - 273.15) * 9/5 + 32
-            daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], (nbm_tmin_f.values - urma_tmin_f.values).astype(np.float32))
+            nbm_tmin_f = (ds_nbm_min[list(ds_nbm_min.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+            daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], (nbm_tmin_f - urma_tmin_f).astype(np.float32))
             ds_nbm_min.close()
             for f in glob.glob(f"{temp_grib_min}*"): os.remove(f)
         except Exception: daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], np.full(urma_tmin_f.shape, np.nan, dtype=np.float32))
@@ -139,8 +143,8 @@ for d in range(DAYS_TO_KEEP):
         # Dewpoint
         try:
             ds_nbm_dpt, temp_grib_dpt = get_nbm_qmd(init_dt_str, lead_hours_dpt, 'dpt')
-            nbm_tdpt_f = (ds_nbm_dpt[list(ds_nbm_dpt.data_vars)[0]] - 273.15) * 9/5 + 32
-            daily_diffs[f'lead_{lead}_dpt'] = (['y', 'x'], (nbm_tdpt_f.values - urma_tdpt_f.values).astype(np.float32))
+            nbm_tdpt_f = (ds_nbm_dpt[list(ds_nbm_dpt.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+            daily_diffs[f'lead_{lead}_dpt'] = (['y', 'x'], (nbm_tdpt_f - urma_tdpt_f).astype(np.float32))
             ds_nbm_dpt.close()
             for f in glob.glob(f"{temp_grib_dpt}*"): os.remove(f)
         except Exception as e: 
@@ -153,8 +157,8 @@ for d in range(DAYS_TO_KEEP):
     ds_out = xr.Dataset(
         data_vars=daily_diffs,
         coords={
-            'latitude': (['y', 'x'], ds_urma_max.latitude.values.astype(np.float32)),
-            'longitude': (['y', 'x'], ds_urma_max.longitude.values.astype(np.float32))
+            'latitude': (['y', 'x'], lat_grid),
+            'longitude': (['y', 'x'], lon_grid)
         }
     )
     
