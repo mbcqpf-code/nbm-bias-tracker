@@ -16,199 +16,45 @@
             --border-color: #475569;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-main); display: flex; flex-direction: column; min-height: 100vh; }
 
-        body {
-            background-color: var(--bg-primary);
-            color: var(--text-main);
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
+        header { background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-title { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.5px; }
+        .brand-subtitle { color: var(--text-muted); font-size: 0.85rem; }
+        .badge { background-color: rgba(56, 189, 248, 0.1); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
 
-        /* Top Navigation Header */
-        header {
-            background-color: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        /* Tabs for Max/Min T */
+        .tab-bar { display: flex; background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 0 2rem; }
+        .tab { padding: 1rem 2rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab:hover { color: var(--text-main); }
+        .tab.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        main { display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; padding: 1.5rem; flex-grow: 1; }
+        @media (max-width: 1024px) { main { grid-template-columns: 1fr; } }
 
-        .brand-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
+        .sidebar { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.5rem; }
+        .control-group { display: flex; flex-direction: column; gap: 0.75rem; }
+        .control-label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        
+        .btn-grid { display: grid; gap: 0.5rem; }
+        .btn-grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .btn-grid-5 { grid-template-columns: repeat(5, 1fr); }
 
-        .brand-subtitle {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
+        button.btn { background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); padding: 0.6rem 0.5rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease-in-out; text-align: center; }
+        button.btn:hover { background-color: var(--border-color); }
+        button.btn.active { background-color: var(--accent-blue); color: #0f172a; border-color: var(--accent-blue); font-weight: 700; }
 
-        .badge {
-            background-color: rgba(56, 189, 248, 0.1);
-            color: var(--accent-blue);
-            border: 1px solid var(--accent-blue);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
+        .info-card { background-color: rgba(51, 65, 85, 0.4); border-left: 3px solid var(--accent-blue); padding: 1rem; border-radius: 0 6px 6px 0; font-size: 0.825rem; line-height: 1.5; color: var(--text-muted); }
+        .info-card strong { color: var(--text-main); }
+        .key-hint { background-color: var(--bg-card); border: 1px solid var(--border-color); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.75rem; color: var(--accent-blue); }
 
-        /* Main Dashboard Layout */
-        main {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            flex-grow: 1;
-        }
+        .viewer-container { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 500px; position: relative; }
+        .image-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .plot-image { max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: 4px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
 
-        @media (max-width: 1024px) {
-            main {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Control Sidebar */
-        .sidebar {
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1.25rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        .control-label {
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-        }
-
-        .btn-grid {
-            display: grid;
-            gap: 0.5rem;
-        }
-
-        .btn-grid-4 {
-            grid-template-columns: repeat(4, 1fr);
-        }
-
-        .btn-grid-3 {
-            grid-template-columns: repeat(3, 1fr);
-        }
-
-        button.btn {
-            background-color: var(--bg-card);
-            color: var(--text-main);
-            border: 1px solid var(--border-color);
-            padding: 0.6rem 0.5rem;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease-in-out;
-            text-align: center;
-        }
-
-        button.btn:hover {
-            background-color: var(--border-color);
-        }
-
-        button.btn.active {
-            background-color: var(--accent-blue);
-            color: #0f172a;
-            border-color: var(--accent-blue);
-            font-weight: 700;
-        }
-
-        /* Operational Notes Panel */
-        .info-card {
-            background-color: rgba(51, 65, 85, 0.4);
-            border-left: 3px solid var(--accent-blue);
-            padding: 1rem;
-            border-radius: 0 6px 6px 0;
-            font-size: 0.825rem;
-            line-height: 1.5;
-            color: var(--text-muted);
-        }
-
-        .info-card strong {
-            color: var(--text-main);
-        }
-
-        .key-hint {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 0.75rem;
-            color: var(--accent-blue);
-        }
-
-        /* Image Display Area */
-        .viewer-container {
-            background-color: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 500px;
-            position: relative;
-        }
-
-        .image-wrapper {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .plot-image {
-            max-width: 100%;
-            max-height: 78vh;
-            object-fit: contain;
-            border-radius: 4px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Footer */
-        footer {
-            background-color: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            padding: 0.75rem 2rem;
-            text-align: center;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
+        footer { background-color: var(--bg-secondary); border-top: 1px solid var(--border-color); padding: 0.75rem 2rem; text-align: center; font-size: 0.8rem; color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -216,18 +62,19 @@
     <header>
         <div class="brand">
             <span class="brand-title">NBM vs URMA Verification</span>
-            <span class="badge">CONUS Max T</span>
+            <span class="badge">CONUS</span>
         </div>
-        <div class="brand-subtitle">
-            06z NBM (QMD 50th Percentile) vs 08z URMA Analysis
-        </div>
+        <div class="brand-subtitle">06z NBM (QMD 50th Percentile) vs URMA Analysis</div>
     </header>
 
+    <!-- Parameter Tabs -->
+    <div class="tab-bar">
+        <div class="tab active" data-var="maxt">Max Temperature</div>
+        <div class="tab" data-var="mint">Min Temperature</div>
+    </div>
+
     <main>
-        <!-- Sidebar Controls -->
         <aside class="sidebar">
-            
-            <!-- Lead Time Selection -->
             <div class="control-group">
                 <div class="control-label">Forecast Lead Time</div>
                 <div class="btn-grid btn-grid-4" id="lead-selector">
@@ -242,118 +89,84 @@
                 </div>
             </div>
 
-            <!-- Rolling Window Selection -->
             <div class="control-group">
                 <div class="control-label">Verification Window</div>
-                <div class="btn-grid btn-grid-3" id="window-selector">
-                    <button class="btn active" data-window="5">5-Day</button>
-                    <button class="btn" data-window="10">10-Day</button>
-                    <button class="btn" data-window="15">15-Day</button>
+                <div class="btn-grid btn-grid-5" id="window-selector">
+                    <button class="btn" data-window="1">1-d</button>
+                    <button class="btn" data-window="3">3-d</button>
+                    <button class="btn active" data-window="5">5-d</button>
+                    <button class="btn" data-window="10">10-d</button>
+                    <button class="btn" data-window="15">15-d</button>
                 </div>
             </div>
 
-            <!-- Operational Cheat Sheet -->
             <div class="info-card">
                 <strong>Forecaster Guidance:</strong>
                 <ul style="margin-left: 1.2rem; margin-top: 0.4rem;">
-                    <li><strong>Red Grid Cells:</strong> NBM forecasted warmer than URMA observed (Warm Bias).</li>
-                    <li><strong>Blue Grid Cells:</strong> NBM forecasted cooler than URMA observed (Cold Bias).</li>
-                    <li><strong>QMD Note:</strong> Evaluates quantile-mapped bias-corrected output against ground analysis.</li>
+                    <li><strong>Red:</strong> NBM warmer than URMA observed (Warm Bias).</li>
+                    <li><strong>Blue:</strong> NBM cooler than URMA observed (Cold Bias).</li>
                 </ul>
             </div>
 
-            <!-- Keyboard Shortcuts Hint -->
             <div class="info-card">
                 <strong>Keyboard Shortcuts:</strong><br>
-                • Change Lead Time: <span class="key-hint">←</span> / <span class="key-hint">→</span> Arrow Keys<br>
-                • Change Window: <span class="key-hint">1</span> (5d), <span class="key-hint">2</span> (10d), <span class="key-hint">3</span> (15d)
+                • Next/Prev Lead: <span class="key-hint">←</span> / <span class="key-hint">→</span> Keys<br>
+                • Toggle Max/Min: <span class="key-hint">M</span> Key<br>
+                • Change Window: <span class="key-hint">1</span>, <span class="key-hint">3</span>, <span class="key-hint">5</span>, <span class="key-hint">0</span>(10d), <span class="key-hint">F</span>(15d)
             </div>
-
         </aside>
 
-        <!-- Main Figure Display -->
         <section class="viewer-container">
             <div class="image-wrapper">
-                <img id="active-plot" class="plot-image" src="assets/average_plots/day1_5day.png" alt="NBM Bias Plot">
+                <img id="active-plot" class="plot-image" src="assets/average_plots/day1_5day_maxt.png" alt="NBM Bias Plot">
             </div>
         </section>
     </main>
 
-    <footer>
-        Automated via GitHub Actions • Data Source: NOAA AWS Open Data Program
-    </footer>
+    <footer>Automated via GitHub Actions • Data Source: NOAA AWS Open Data Program</footer>
 
     <script>
-        // State Management
         let currentLead = 1;
         let currentWindow = 5;
+        let currentVar = 'maxt';
 
         const activePlot = document.getElementById('active-plot');
         const leadButtons = document.querySelectorAll('#lead-selector button');
         const windowButtons = document.querySelectorAll('#window-selector button');
+        const tabs = document.querySelectorAll('.tab');
 
-        // Update plot image and pre-fetch surrounding images for seamless toggling
         function updatePlot() {
-            const imagePath = `assets/average_plots/day${currentLead}_${currentWindow}day.png`;
+            const imagePath = `assets/average_plots/day${currentLead}_${currentWindow}day_${currentVar}.png`;
             activePlot.src = imagePath;
 
-            // Update UI Active States
-            leadButtons.forEach(btn => {
-                btn.classList.toggle('active', parseInt(btn.dataset.lead) === currentLead);
-            });
-
-            windowButtons.forEach(btn => {
-                btn.classList.toggle('active', parseInt(btn.dataset.window) === currentWindow);
-            });
+            leadButtons.forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.lead) === currentLead));
+            windowButtons.forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.window) === currentWindow));
+            tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.var === currentVar));
 
             preloadAdjacentImages();
         }
 
-        // Preload next/previous lead time images into browser cache
         function preloadAdjacentImages() {
             const nextLead = currentLead < 8 ? currentLead + 1 : 1;
             const prevLead = currentLead > 1 ? currentLead - 1 : 8;
-
             [nextLead, prevLead].forEach(lead => {
-                const img = new Image();
-                img.src = `assets/average_plots/day${lead}_${currentWindow}day.png`;
+                new Image().src = `assets/average_plots/day${lead}_${currentWindow}day_${currentVar}.png`;
             });
         }
 
-        // Event Listeners for Lead Buttons
-        leadButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentLead = parseInt(btn.dataset.lead);
-                updatePlot();
-            });
-        });
+        leadButtons.forEach(btn => btn.addEventListener('click', () => { currentLead = parseInt(btn.dataset.lead); updatePlot(); }));
+        windowButtons.forEach(btn => btn.addEventListener('click', () => { currentWindow = parseInt(btn.dataset.window); updatePlot(); }));
+        tabs.forEach(tab => tab.addEventListener('click', () => { currentVar = tab.dataset.var; updatePlot(); }));
 
-        // Event Listeners for Window Buttons
-        windowButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentWindow = parseInt(btn.dataset.window);
-                updatePlot();
-            });
-        });
-
-        // Operational Keyboard Navigation Shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight') {
-                currentLead = currentLead < 8 ? currentLead + 1 : 1;
-                updatePlot();
-            } else if (e.key === 'ArrowLeft') {
-                currentLead = currentLead > 1 ? currentLead - 1 : 8;
-                updatePlot();
-            } else if (e.key === '1') {
-                currentWindow = 5;
-                updatePlot();
-            } else if (e.key === '2') {
-                currentWindow = 10;
-                updatePlot();
-            } else if (e.key === '3') {
-                currentWindow = 15;
-                updatePlot();
-            }
+            if (e.key === 'ArrowRight') { currentLead = currentLead < 8 ? currentLead + 1 : 1; updatePlot(); }
+            else if (e.key === 'ArrowLeft') { currentLead = currentLead > 1 ? currentLead - 1 : 8; updatePlot(); }
+            else if (e.key.toLowerCase() === 'm') { currentVar = currentVar === 'maxt' ? 'mint' : 'maxt'; updatePlot(); }
+            else if (e.key === '1') { currentWindow = 1; updatePlot(); }
+            else if (e.key === '3') { currentWindow = 3; updatePlot(); }
+            else if (e.key === '5') { currentWindow = 5; updatePlot(); }
+            else if (e.key === '0') { currentWindow = 10; updatePlot(); }
+            else if (e.key.toLowerCase() === 'f') { currentWindow = 15; updatePlot(); }
         });
     </script>
 </body>
