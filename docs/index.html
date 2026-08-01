@@ -110,9 +110,9 @@
 
             <div class="info-card">
                 <strong>Keyboard Shortcuts:</strong><br>
-                • Next/Prev Lead: <span class="key-hint">←</span> / <span class="key-hint">→</span> Keys<br>
-                • Toggle Max/Min: <span class="key-hint">M</span> Key<br>
-                • Change Window: <span class="key-hint">1</span>, <span class="key-hint">3</span>, <span class="key-hint">5</span>, <span class="key-hint">0</span>(10d), <span class="key-hint">F</span>(15d)
+                • Change Lead Time: <span class="key-hint">1</span> - <span class="key-hint">8</span> Keys<br>
+                • Change Window: <span class="key-hint">←</span> / <span class="key-hint">→</span> Arrows<br>
+                • Toggle Max/Min: <span class="key-hint">M</span> Key
             </div>
         </aside>
 
@@ -129,6 +129,9 @@
         let currentLead = 1;
         let currentWindow = 5;
         let currentVar = 'maxt';
+        
+        // Define the available verification windows for arrow-key cycling
+        const windowsList = [1, 3, 5, 10, 15];
 
         const activePlot = document.getElementById('active-plot');
         const leadButtons = document.querySelectorAll('#lead-selector button');
@@ -147,26 +150,50 @@
         }
 
         function preloadAdjacentImages() {
-            const nextLead = currentLead < 8 ? currentLead + 1 : 1;
-            const prevLead = currentLead > 1 ? currentLead - 1 : 8;
-            [nextLead, prevLead].forEach(lead => {
-                new Image().src = `assets/average_plots/day${lead}_${currentWindow}day_${currentVar}.png`;
-            });
+            // Preload max and min for the current state to make 'M' toggle instant
+            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_maxt.png`;
+            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_mint.png`;
         }
 
+        // Mouse click listeners
         leadButtons.forEach(btn => btn.addEventListener('click', () => { currentLead = parseInt(btn.dataset.lead); updatePlot(); }));
         windowButtons.forEach(btn => btn.addEventListener('click', () => { currentWindow = parseInt(btn.dataset.window); updatePlot(); }));
         tabs.forEach(tab => tab.addEventListener('click', () => { currentVar = tab.dataset.var; updatePlot(); }));
 
+        // Keyboard listeners
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight') { currentLead = currentLead < 8 ? currentLead + 1 : 1; updatePlot(); }
-            else if (e.key === 'ArrowLeft') { currentLead = currentLead > 1 ? currentLead - 1 : 8; updatePlot(); }
-            else if (e.key.toLowerCase() === 'm') { currentVar = currentVar === 'maxt' ? 'mint' : 'maxt'; updatePlot(); }
-            else if (e.key === '1') { currentWindow = 1; updatePlot(); }
-            else if (e.key === '3') { currentWindow = 3; updatePlot(); }
-            else if (e.key === '5') { currentWindow = 5; updatePlot(); }
-            else if (e.key === '0') { currentWindow = 10; updatePlot(); }
-            else if (e.key.toLowerCase() === 'f') { currentWindow = 15; updatePlot(); }
+            // Numbers 1-8 for Forecast Lead Time
+            if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) { 
+                currentLead = parseInt(e.key); 
+                updatePlot(); 
+            }
+            // 'M' to toggle Max/Min Temperature
+            else if (e.key.toLowerCase() === 'm') { 
+                currentVar = currentVar === 'maxt' ? 'mint' : 'maxt'; 
+                updatePlot(); 
+            }
+            // Right Arrow for larger verification window
+            else if (e.key === 'ArrowRight') { 
+                let idx = windowsList.indexOf(currentWindow);
+                if (idx < windowsList.length - 1) {
+                    currentWindow = windowsList[idx + 1];
+                    updatePlot();
+                } else {
+                    currentWindow = windowsList[0]; // Loop back to 1-d
+                    updatePlot();
+                }
+            }
+            // Left Arrow for smaller verification window
+            else if (e.key === 'ArrowLeft') { 
+                let idx = windowsList.indexOf(currentWindow);
+                if (idx > 0) {
+                    currentWindow = windowsList[idx - 1];
+                    updatePlot();
+                } else {
+                    currentWindow = windowsList[windowsList.length - 1]; // Loop to 15-d
+                    updatePlot();
+                }
+            }
         });
     </script>
 </body>
