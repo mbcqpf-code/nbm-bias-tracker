@@ -19,20 +19,20 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 MAX_LEAD_DAYS = 8
 WINDOWS = [1, 3, 5, 10, 15]
-
-# Added Dewpoint to the processing queue
-VARIABLES = [('maxt', 'Max T'), ('mint', 'Min T'), ('dpt', '21z Dewpoint')]
+VARIABLES = [('maxt', 'Max Temp'), ('mint', 'Min Temp'), ('dpt', '21z Dewpoint')]
 
 all_files = sorted(glob.glob("data_cache/diff_*.nc"), reverse=True)
 
 if not all_files:
     raise FileNotFoundError("No NetCDF files found in data_cache/. Run 01_daily_compute.py first.")
 
+# Extract the URMA run date from the latest file
 latest_file_date_str = os.path.basename(all_files[0]).replace('diff_', '').replace('.nc', '')
-valid_date = pd.to_datetime(latest_file_date_str) - pd.Timedelta(days=1)
-valid_date_str = valid_date.strftime('%Y-%m-%d')
+# Calculate the previous day's date for MaxT and Dewpoint
+prev_day_date = pd.to_datetime(latest_file_date_str) - pd.Timedelta(days=1)
+prev_day_date_str = prev_day_date.strftime('%Y-%m-%d')
 
-print(f"Most recent dataset date: {latest_file_date_str} (Valid for {valid_date_str})")
+print(f"Most recent dataset date: {latest_file_date_str}")
 
 with xr.open_dataset(all_files[0]) as ds_ref:
     lats = ds_ref.latitude.values
@@ -49,7 +49,6 @@ def plot_bias_map(avg_bias_grid, lead_day, window_days, n_samples, valid_date_st
     ax.add_feature(cfeature.STATES.with_scale('50m'), linewidth=0.3, edgecolor='gray')
     ax.set_extent([-125, -66, 24, 50], crs=ccrs.PlateCarree()) 
     
-    # Keeping the same colormap since Red = Moisture bias (Too high), Blue = Too low
     im = ax.pcolormesh(
         lons, lats, avg_bias_grid, 
         transform=ccrs.PlateCarree(), 
@@ -85,6 +84,14 @@ for window in WINDOWS:
     print(f"\n--- Calculating {window}-Day Average (Using {actual_count} file(s)) ---")
 
     for var_key, var_label in VARIABLES:
+        
+        # SMART LABELING LOGIC:
+        # Min T verifies on the current file date. Max T and Dpt verify on the previous day.
+        if var_key == 'mint':
+            display_date_str = latest_file_date_str
+        else:
+            display_date_str = prev_day_date_str
+            
         for lead in range(1, MAX_LEAD_DAYS + 1):
             nc_var_name = f"lead_{lead}_{var_key}"
             grid_stack = []
@@ -109,7 +116,7 @@ for window in WINDOWS:
                 lead_day=lead,
                 window_days=window,
                 n_samples=len(grid_stack),
-                valid_date_str=valid_date_str,
+                valid_date_str=display_date_str,  # Pass the corrected date dynamically
                 var_label=var_label,
                 output_path=out_path
             )
