@@ -24,9 +24,9 @@ os.makedirs("docs/assets/average_plots", exist_ok=True)
 print(f"--- Starting Daily Collector (Target End Date: {END_DATE}) ---")
 
 # ==============================================================================
-# Custom Downloader for NBM QMD (Max & Min)
+# Custom Downloader for NBM QMD (Max, Min, DPT)
 # ==============================================================================
-def get_nbm_qmd(init_dt, lead_hrs, var_type='max'):
+def get_nbm_qmd(init_dt, lead_hrs, var_type):
     date_str = init_dt.strftime('%Y%m%d')
     cycle_str = f"{init_dt.hour:02d}"
     
@@ -40,17 +40,24 @@ def get_nbm_qmd(init_dt, lead_hrs, var_type='max'):
     start_byte, end_byte = None, None
     lines = r_idx.text.splitlines()
     
-    fcst_str = "max fcst" if var_type == 'max' else "min fcst"
-    
     for i, line in enumerate(lines):
-        if f":TMP:2 m above ground:" in line and fcst_str in line and "50% level" in line:
-            start_byte = int(line.split(':')[1])
-            if i + 1 < len(lines):
-                end_byte = int(lines[i+1].split(':')[1]) - 1
-            break
+        line_lower = line.lower()
+        if "50% level" in line_lower and "2 m above ground" in line_lower:
+            if var_type == 'max' and "max" in line_lower:
+                start_byte = int(line.split(':')[1])
+                if i + 1 < len(lines): end_byte = int(lines[i+1].split(':')[1]) - 1
+                break
+            elif var_type == 'min' and "min" in line_lower:
+                start_byte = int(line.split(':')[1])
+                if i + 1 < len(lines): end_byte = int(lines[i+1].split(':')[1]) - 1
+                break
+            elif var_type == 'dpt' and ":dpt:" in line_lower:
+                start_byte = int(line.split(':')[1])
+                if i + 1 < len(lines): end_byte = int(lines[i+1].split(':')[1]) - 1
+                break
             
     if start_byte is None:
-        raise Exception(f"TMP {fcst_str} (50%) not found.")
+        raise Exception(f"{var_type.upper()} (50%) not found in GRIB index.")
         
     headers = {"Range": f"bytes={start_byte}-{end_byte}" if end_byte else f"bytes={start_byte}-"}
     r_grib = requests.get(f"{base_url}/{grib_name}", headers=headers)
@@ -69,6 +76,7 @@ end_dt = pd.to_datetime(END_DATE)
 for d in range(DAYS_TO_KEEP):
     target_dt = end_dt - pd.Timedelta(days=d)
     date_str = target_dt.strftime('%Y-%m-%d')
+    valid_date_str = (target_dt - pd.Timedelta(days=1)).strftime('%Y-%m-%d')
     nc_filename = f"data_cache/diff_{date_str}.nc"
     
     if os.path.exists(nc_filename):
@@ -77,22 +85,23 @@ for d in range(DAYS_TO_KEEP):
         
     print(f"\n[{date_str}] -> Missing. Starting processing...")
     
-    # 2. Download URMA Max T (08z) and Min T (20z)
+    # 2. Download URMA
     urma_maxt_dt = f"{date_str} 08:00"
     urma_mint_dt = f"{date_str} 20:00"
+    urma_dpt_dt = f"{valid_date_str} 21:00" # 21z on the valid weather day
     
     try:
-        # Max T
         H_urma_max = Herbie(urma_maxt_dt, model="urma", product="anl")
         ds_urma_max = H_urma_max.xarray(":TMAX:2 m above ground:", remove_grib=False)
-        urma_max_var = list(ds_urma_max.data_vars)[0]
-        urma_tmax_f = (ds_urma_max[urma_max_var] - 273.15) * 9/5 + 32
+        urma_tmax_f = (ds_urma_max[list(ds_urma_max.data_vars)[0]] - 273.15) * 9/5 + 32
         
-        # Min T
         H_urma_min = Herbie(urma_mint_dt, model="urma", product="anl")
         ds_urma_min = H_urma_min.xarray(":TMIN:2 m above ground:", remove_grib=False)
-        urma_min_var = list(ds_urma_min.data_vars)[0]
-        urma_tmin_f = (ds_urma_min[urma_min_var] - 273.15) * 9/5 + 32
+        urma_tmin_f = (ds_urma_min[list(ds_urma_min.data_vars)[0]] - 273.15) * 9/5 + 32
+
+        H_urma_dpt = Herbie(urma_dpt_dt, model="urma", product="anl")
+        ds_urma_dpt = H_urma_dpt.xarray(":DPT:2 m above ground:", remove_grib=False)
+        urma_tdpt_f = (ds_urma_dpt[list(ds_urma_dpt.data_vars)[0]] - 273.15) * 9/5 + 32
         
     except Exception as e:
         print(f"  [!] URMA failed for {date_str}: {e}. Skipping day.")
@@ -102,46 +111,43 @@ for d in range(DAYS_TO_KEEP):
     
     # 3. Download NBM Leads 1-8
     for lead in range(1, MAX_LEAD_DAYS + 1):
-        # OFFSET FIX: Max T verifies at 06z, Min T verifies at 12z (+6 hours)
         lead_hours_max = lead * 24
-        lead_hours_min = (lead * 24) + 6
+        lead_hours_min = (lead * 24) + 12
+        lead_hours_dpt = (lead * 24) - 9
         
         init_dt = target_dt - pd.Timedelta(days=lead)
         init_dt_str = pd.to_datetime(f"{init_dt.strftime('%Y-%m-%d')} {NBM_CYCLE}")
         
-        # Process Max T
+        # Max T
         try:
             ds_nbm_max, temp_grib_max = get_nbm_qmd(init_dt_str, lead_hours_max, 'max')
-            nbm_var_max = list(ds_nbm_max.data_vars)[0]
-            nbm_tmax_f = (ds_nbm_max[nbm_var_max] - 273.15) * 9/5 + 32
-            
-            diff_max = (nbm_tmax_f.values - urma_tmax_f.values).astype(np.float32)
-            daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], diff_max)
-            
+            nbm_tmax_f = (ds_nbm_max[list(ds_nbm_max.data_vars)[0]] - 273.15) * 9/5 + 32
+            daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], (nbm_tmax_f.values - urma_tmax_f.values).astype(np.float32))
             ds_nbm_max.close()
-            os.remove(temp_grib_max)
-            for idx_file in glob.glob(f"{temp_grib_max}*.idx"): os.remove(idx_file)
-        except Exception as e:
-            print(f"  [!] Day {lead} Max T missing: {e}")
-            daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], np.full(urma_tmax_f.shape, np.nan, dtype=np.float32))
+            for f in glob.glob(f"{temp_grib_max}*"): os.remove(f)
+        except Exception: daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], np.full(urma_tmax_f.shape, np.nan, dtype=np.float32))
 
-        # Process Min T
+        # Min T
         try:
             ds_nbm_min, temp_grib_min = get_nbm_qmd(init_dt_str, lead_hours_min, 'min')
-            nbm_var_min = list(ds_nbm_min.data_vars)[0]
-            nbm_tmin_f = (ds_nbm_min[nbm_var_min] - 273.15) * 9/5 + 32
-            
-            diff_min = (nbm_tmin_f.values - urma_tmin_f.values).astype(np.float32)
-            daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], diff_min)
-            
+            nbm_tmin_f = (ds_nbm_min[list(ds_nbm_min.data_vars)[0]] - 273.15) * 9/5 + 32
+            daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], (nbm_tmin_f.values - urma_tmin_f.values).astype(np.float32))
             ds_nbm_min.close()
-            os.remove(temp_grib_min)
-            for idx_file in glob.glob(f"{temp_grib_min}*.idx"): os.remove(idx_file)
-        except Exception as e:
-            print(f"  [!] Day {lead} Min T missing: {e}")
-            daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], np.full(urma_tmin_f.shape, np.nan, dtype=np.float32))
+            for f in glob.glob(f"{temp_grib_min}*"): os.remove(f)
+        except Exception: daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], np.full(urma_tmin_f.shape, np.nan, dtype=np.float32))
 
-        print(f"  -> Day {lead} forecast (Max: +{lead_hours_max}h, Min: +{lead_hours_min}h) processed.")
+        # Dewpoint
+        try:
+            ds_nbm_dpt, temp_grib_dpt = get_nbm_qmd(init_dt_str, lead_hours_dpt, 'dpt')
+            nbm_tdpt_f = (ds_nbm_dpt[list(ds_nbm_dpt.data_vars)[0]] - 273.15) * 9/5 + 32
+            daily_diffs[f'lead_{lead}_dpt'] = (['y', 'x'], (nbm_tdpt_f.values - urma_tdpt_f.values).astype(np.float32))
+            ds_nbm_dpt.close()
+            for f in glob.glob(f"{temp_grib_dpt}*"): os.remove(f)
+        except Exception as e: 
+            print(f"  [!] Day {lead} DPT missing: {e}")
+            daily_diffs[f'lead_{lead}_dpt'] = (['y', 'x'], np.full(urma_tdpt_f.shape, np.nan, dtype=np.float32))
+
+        print(f"  -> Day {lead} forecast (Max: +{lead_hours_max}h, Min: +{lead_hours_min}h, Dpt: +{lead_hours_dpt}h) processed.")
 
     # 4. Save to NetCDF
     ds_out = xr.Dataset(
@@ -169,11 +175,9 @@ for nc_file in glob.glob("data_cache/diff_*.nc"):
     basename = os.path.basename(nc_file)
     file_date_str = basename.replace('diff_', '').replace('.nc', '')
     try:
-        file_date = pd.to_datetime(file_date_str)
-        if file_date <= cutoff_date:
+        if pd.to_datetime(file_date_str) <= cutoff_date:
             os.remove(nc_file)
             print(f"Deleted old archive: {nc_file}")
-    except Exception as e:
-        pass
+    except Exception: pass
         
 print("Daily Collector finished!")
