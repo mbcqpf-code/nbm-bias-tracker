@@ -3,20 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NBM Temperature Bias Dashboard | NWS Operational Verification</title>
+    <title>NBM Bias Dashboard | NWS Operational Verification</title>
     <style>
         :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-card: #334155;
-            --accent-blue: #38bdf8;
-            --accent-hover: #0284c7;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #475569;
+            --bg-primary: #0f172a; --bg-secondary: #1e293b; --bg-card: #334155;
+            --accent-blue: #38bdf8; --accent-hover: #0284c7; --text-main: #f8fafc;
+            --text-muted: #94a3b8; --border-color: #475569;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
         body { background-color: var(--bg-primary); color: var(--text-main); display: flex; flex-direction: column; min-height: 100vh; }
 
         header { background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
@@ -25,7 +20,6 @@
         .brand-subtitle { color: var(--text-muted); font-size: 0.85rem; }
         .badge { background-color: rgba(56, 189, 248, 0.1); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
 
-        /* Tabs for Max/Min T */
         .tab-bar { display: flex; background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 0 2rem; }
         .tab { padding: 1rem 2rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
         .tab:hover { color: var(--text-main); }
@@ -36,21 +30,21 @@
 
         .sidebar { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.5rem; }
         .control-group { display: flex; flex-direction: column; gap: 0.75rem; }
-        .control-label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .control-label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
         
         .btn-grid { display: grid; gap: 0.5rem; }
         .btn-grid-4 { grid-template-columns: repeat(4, 1fr); }
         .btn-grid-5 { grid-template-columns: repeat(5, 1fr); }
 
-        button.btn { background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); padding: 0.6rem 0.5rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease-in-out; text-align: center; }
+        button.btn { background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); padding: 0.6rem 0.5rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
         button.btn:hover { background-color: var(--border-color); }
-        button.btn.active { background-color: var(--accent-blue); color: #0f172a; border-color: var(--accent-blue); font-weight: 700; }
+        button.btn.active { background-color: var(--accent-blue); color: #0f172a; border-color: var(--accent-blue); }
 
         .info-card { background-color: rgba(51, 65, 85, 0.4); border-left: 3px solid var(--accent-blue); padding: 1rem; border-radius: 0 6px 6px 0; font-size: 0.825rem; line-height: 1.5; color: var(--text-muted); }
         .info-card strong { color: var(--text-main); }
         .key-hint { background-color: var(--bg-card); border: 1px solid var(--border-color); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.75rem; color: var(--accent-blue); }
 
-        .viewer-container { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 500px; position: relative; }
+        .viewer-container { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 500px; }
         .image-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
         .plot-image { max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: 4px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
 
@@ -69,8 +63,9 @@
 
     <!-- Parameter Tabs -->
     <div class="tab-bar">
-        <div class="tab active" data-var="maxt">Max Temperature</div>
-        <div class="tab" data-var="mint">Min Temperature</div>
+        <div class="tab active" data-var="maxt">Max T (08z)</div>
+        <div class="tab" data-var="mint">Min T (20z)</div>
+        <div class="tab" data-var="dpt">Dewpoint (21z)</div>
     </div>
 
     <main>
@@ -103,8 +98,8 @@
             <div class="info-card">
                 <strong>Forecaster Guidance:</strong>
                 <ul style="margin-left: 1.2rem; margin-top: 0.4rem;">
-                    <li><strong>Red:</strong> NBM warmer than URMA observed (Warm Bias).</li>
-                    <li><strong>Blue:</strong> NBM cooler than URMA observed (Cold Bias).</li>
+                    <li><strong>Red:</strong> NBM higher/warmer than URMA observed.</li>
+                    <li><strong>Blue:</strong> NBM lower/cooler than URMA observed.</li>
                 </ul>
             </div>
 
@@ -112,7 +107,7 @@
                 <strong>Keyboard Shortcuts:</strong><br>
                 • Change Lead Time: <span class="key-hint">1</span> - <span class="key-hint">8</span> Keys<br>
                 • Change Window: <span class="key-hint">←</span> / <span class="key-hint">→</span> Arrows<br>
-                • Toggle Max/Min: <span class="key-hint">M</span> Key
+                • Variables: <span class="key-hint">M</span> (Max/Min), <span class="key-hint">D</span> (Dewpoint)
             </div>
         </aside>
 
@@ -130,7 +125,6 @@
         let currentWindow = 5;
         let currentVar = 'maxt';
         
-        // Define the available verification windows for arrow-key cycling
         const windowsList = [1, 3, 5, 10, 15];
 
         const activePlot = document.getElementById('active-plot');
@@ -150,49 +144,28 @@
         }
 
         function preloadAdjacentImages() {
-            // Preload max and min for the current state to make 'M' toggle instant
             new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_maxt.png`;
             new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_mint.png`;
+            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_dpt.png`;
         }
 
-        // Mouse click listeners
         leadButtons.forEach(btn => btn.addEventListener('click', () => { currentLead = parseInt(btn.dataset.lead); updatePlot(); }));
         windowButtons.forEach(btn => btn.addEventListener('click', () => { currentWindow = parseInt(btn.dataset.window); updatePlot(); }));
         tabs.forEach(tab => tab.addEventListener('click', () => { currentVar = tab.dataset.var; updatePlot(); }));
 
-        // Keyboard listeners
         document.addEventListener('keydown', (e) => {
-            // Numbers 1-8 for Forecast Lead Time
-            if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) { 
-                currentLead = parseInt(e.key); 
-                updatePlot(); 
-            }
-            // 'M' to toggle Max/Min Temperature
-            else if (e.key.toLowerCase() === 'm') { 
-                currentVar = currentVar === 'maxt' ? 'mint' : 'maxt'; 
-                updatePlot(); 
-            }
-            // Right Arrow for larger verification window
+            if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) { currentLead = parseInt(e.key); updatePlot(); }
+            else if (e.key.toLowerCase() === 'm') { currentVar = currentVar === 'maxt' ? 'mint' : 'maxt'; updatePlot(); }
+            else if (e.key.toLowerCase() === 'd') { currentVar = 'dpt'; updatePlot(); }
             else if (e.key === 'ArrowRight') { 
                 let idx = windowsList.indexOf(currentWindow);
-                if (idx < windowsList.length - 1) {
-                    currentWindow = windowsList[idx + 1];
-                    updatePlot();
-                } else {
-                    currentWindow = windowsList[0]; // Loop back to 1-d
-                    updatePlot();
-                }
+                currentWindow = idx < windowsList.length - 1 ? windowsList[idx + 1] : windowsList[0];
+                updatePlot();
             }
-            // Left Arrow for smaller verification window
             else if (e.key === 'ArrowLeft') { 
                 let idx = windowsList.indexOf(currentWindow);
-                if (idx > 0) {
-                    currentWindow = windowsList[idx - 1];
-                    updatePlot();
-                } else {
-                    currentWindow = windowsList[windowsList.length - 1]; // Loop to 15-d
-                    updatePlot();
-                }
+                currentWindow = idx > 0 ? windowsList[idx - 1] : windowsList[windowsList.length - 1];
+                updatePlot();
             }
         });
     </script>
