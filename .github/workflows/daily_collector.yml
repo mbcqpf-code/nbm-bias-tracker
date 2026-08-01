@@ -40,6 +40,8 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global http.postBuffer 524288000
+          git config --global http.version HTTP/1.1
           git add data_cache/ docs/
           git diff --staged --quiet || git commit -m "Automated daily data and plot update"
           git push
