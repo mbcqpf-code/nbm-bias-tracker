@@ -19,19 +19,20 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 MAX_LEAD_DAYS = 8
 WINDOWS = [1, 3, 5, 10, 15]
-VARIABLES = [('maxt', 'Max T'), ('mint', 'Min T')]
+
+# Added Dewpoint to the processing queue
+VARIABLES = [('maxt', 'Max T'), ('mint', 'Min T'), ('dpt', '21z Dewpoint')]
 
 all_files = sorted(glob.glob("data_cache/diff_*.nc"), reverse=True)
 
 if not all_files:
     raise FileNotFoundError("No NetCDF files found in data_cache/. Run 01_daily_compute.py first.")
 
-# Extract the URMA run date from the file, then subtract 1 day for the valid weather date
 latest_file_date_str = os.path.basename(all_files[0]).replace('diff_', '').replace('.nc', '')
 valid_date = pd.to_datetime(latest_file_date_str) - pd.Timedelta(days=1)
 valid_date_str = valid_date.strftime('%Y-%m-%d')
 
-print(f"Most recent dataset date: {latest_file_date_str} (Valid for temps on {valid_date_str})")
+print(f"Most recent dataset date: {latest_file_date_str} (Valid for {valid_date_str})")
 
 with xr.open_dataset(all_files[0]) as ds_ref:
     lats = ds_ref.latitude.values
@@ -48,6 +49,7 @@ def plot_bias_map(avg_bias_grid, lead_day, window_days, n_samples, valid_date_st
     ax.add_feature(cfeature.STATES.with_scale('50m'), linewidth=0.3, edgecolor='gray')
     ax.set_extent([-125, -66, 24, 50], crs=ccrs.PlateCarree()) 
     
+    # Keeping the same colormap since Red = Moisture bias (Too high), Blue = Too low
     im = ax.pcolormesh(
         lons, lats, avg_bias_grid, 
         transform=ccrs.PlateCarree(), 
@@ -58,9 +60,8 @@ def plot_bias_map(avg_bias_grid, lead_day, window_days, n_samples, valid_date_st
     
     lead_hours = lead_day * 24
     
-    # Updated title to reflect the actual valid weather date
     ax.set_title(
-        f"NBM Day {lead_day} (+{lead_hours}h) {var_label} Average Bias (°F)\n"
+        f"NBM Day {lead_day} {var_label} Average Bias (°F)\n"
         f"{window_days}-Day Window Valid Through {valid_date_str} (N={n_samples})",
         fontsize=13, fontweight='bold', pad=10
     )
@@ -79,8 +80,7 @@ for window in WINDOWS:
     selected_files = all_files[:window]
     actual_count = len(selected_files)
     
-    if actual_count == 0:
-        continue
+    if actual_count == 0: continue
 
     print(f"\n--- Calculating {window}-Day Average (Using {actual_count} file(s)) ---")
 
@@ -94,13 +94,9 @@ for window in WINDOWS:
                     with xr.open_dataset(filepath) as ds:
                         if nc_var_name in ds.data_vars:
                             grid_stack.append(ds[nc_var_name].values)
-                except Exception as e:
-                    print(f"Error reading {filepath}: {e}")
-                    continue
+                except Exception as e: continue
 
-            if not grid_stack:
-                print(f"  [!] No valid data for {var_label} Lead Day {lead}")
-                continue
+            if not grid_stack: continue
 
             stack_array = np.array(grid_stack)
             avg_bias = np.nanmean(stack_array, axis=0)
@@ -117,6 +113,5 @@ for window in WINDOWS:
                 var_label=var_label,
                 output_path=out_path
             )
-            print(f"  ==> Saved: {out_filename}")
 
 print("\nAll average bias plots successfully generated!")
