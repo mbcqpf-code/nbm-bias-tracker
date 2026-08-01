@@ -40,7 +40,6 @@ def get_nbm_qmd(init_dt, lead_hrs, var_type='max'):
     start_byte, end_byte = None, None
     lines = r_idx.text.splitlines()
     
-    # Toggle search string based on Max/Min
     fcst_str = "max fcst" if var_type == 'max' else "min fcst"
     
     for i, line in enumerate(lines):
@@ -103,13 +102,16 @@ for d in range(DAYS_TO_KEEP):
     
     # 3. Download NBM Leads 1-8
     for lead in range(1, MAX_LEAD_DAYS + 1):
-        lead_hours = lead * 24
+        # OFFSET FIX: Max T verifies at 06z, Min T verifies at 12z (+6 hours)
+        lead_hours_max = lead * 24
+        lead_hours_min = (lead * 24) + 6
+        
         init_dt = target_dt - pd.Timedelta(days=lead)
         init_dt_str = pd.to_datetime(f"{init_dt.strftime('%Y-%m-%d')} {NBM_CYCLE}")
         
         # Process Max T
         try:
-            ds_nbm_max, temp_grib_max = get_nbm_qmd(init_dt_str, lead_hours, 'max')
+            ds_nbm_max, temp_grib_max = get_nbm_qmd(init_dt_str, lead_hours_max, 'max')
             nbm_var_max = list(ds_nbm_max.data_vars)[0]
             nbm_tmax_f = (ds_nbm_max[nbm_var_max] - 273.15) * 9/5 + 32
             
@@ -125,7 +127,7 @@ for d in range(DAYS_TO_KEEP):
 
         # Process Min T
         try:
-            ds_nbm_min, temp_grib_min = get_nbm_qmd(init_dt_str, lead_hours, 'min')
+            ds_nbm_min, temp_grib_min = get_nbm_qmd(init_dt_str, lead_hours_min, 'min')
             nbm_var_min = list(ds_nbm_min.data_vars)[0]
             nbm_tmin_f = (ds_nbm_min[nbm_var_min] - 273.15) * 9/5 + 32
             
@@ -139,7 +141,7 @@ for d in range(DAYS_TO_KEEP):
             print(f"  [!] Day {lead} Min T missing: {e}")
             daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], np.full(urma_tmin_f.shape, np.nan, dtype=np.float32))
 
-        print(f"  -> Day {lead} forecast (+{lead_hours}h) Max/Min processed.")
+        print(f"  -> Day {lead} forecast (Max: +{lead_hours_max}h, Min: +{lead_hours_min}h) processed.")
 
     # 4. Save to NetCDF
     ds_out = xr.Dataset(
