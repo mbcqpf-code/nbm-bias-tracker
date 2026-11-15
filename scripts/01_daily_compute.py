@@ -6,6 +6,8 @@ import os
 import glob
 from herbie import Herbie
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 warnings.filterwarnings('ignore')
 
 # ==============================================================================
@@ -23,19 +25,18 @@ os.makedirs("docs/assets/average_plots", exist_ok=True)
 
 print(f"--- Starting Daily Collector (Target End Date: {END_DATE}) ---")
 
-# ==============================================================================
-# Custom Downloader for NBM QMD (Max, Min, DPT)
-# ==============================================================================
-def get_nbm_qmd(init_dt, lead_hrs, var_type):
+# Shared HTTP Session for connection pooling
+http_session = requests.Session()
+
+def get_nbm_qmd(init_dt, lead_hrs, var_type, session):
     date_str = init_dt.strftime('%Y%m%d')
     cycle_str = f"{init_dt.hour:02d}"
     
     base_url = f"https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.{date_str}/{cycle_str}/qmd"
     grib_name = f"blend.t{cycle_str}z.qmd.f{lead_hrs:03d}.co.grib2"
     
-    r_idx = requests.get(f"{base_url}/{grib_name}.idx")
-    if r_idx.status_code != 200:
-        raise Exception("Index file not found")
+    r_idx = session.get(f"{base_url}/{grib_name}.idx", timeout=15)
+    r_idx.raise_for_status()
         
     start_byte, end_byte = None, None
     lines = r_idx.text.splitlines()
@@ -43,30 +44,31 @@ def get_nbm_qmd(init_dt, lead_hrs, var_type):
     for i, line in enumerate(lines):
         line_lower = line.lower()
         if "50% level" in line_lower and "2 m above ground" in line_lower:
-            if var_type == 'max' and "max" in line_lower:
+            if (var_type == 'max' and "max" in line_lower) or \
+               (var_type == 'min' and "min" in line_lower) or \
+               (var_type == 'dpt' and ":dpt:" in line_lower):
                 start_byte = int(line.split(':')[1])
-                if i + 1 < len(lines): end_byte = int(lines[i+1].split(':')[1]) - 1
-                break
-            elif var_type == 'min' and "min" in line_lower:
-                start_byte = int(line.split(':')[1])
-                if i + 1 < len(lines): end_byte = int(lines[i+1].split(':')[1]) - 1
-                break
-            elif var_type == 'dpt' and ":dpt:" in line_lower:
-                start_byte = int(line.split(':')[1])
-                if i + 1 < len(lines): end_byte = int(lines[i+1].split(':')[1]) - 1
+                
+                # FIX: Scan forward for the next line with a strictly greater byte offset
+                for next_line in lines[i + 1:]:
+                    next_byte = int(next_line.split(':')[1])
+                    if next_byte > start_byte:
+                        end_byte = next_byte - 1
+                        break
                 break
             
     if start_byte is None:
         raise Exception(f"{var_type.upper()} (50%) not found in GRIB index.")
         
     headers = {"Range": f"bytes={start_byte}-{end_byte}" if end_byte else f"bytes={start_byte}-"}
-    r_grib = requests.get(f"{base_url}/{grib_name}", headers=headers)
+    r_grib = session.get(f"{base_url}/{grib_name}", headers=headers, timeout=30)
+    r_grib.raise_for_status()
     
-    temp_file = f"nbm_temp_{var_type}_{lead_hrs}h.grib2"
+    temp_file = f"nbm_temp_{var_type}_{lead_hrs}h_{init_dt.strftime('%Y%m%d')}.grib2"
     with open(temp_file, "wb") as f:
         f.write(r_grib.content)
         
-    return xr.open_dataset(temp_file, engine='cfgrib'), temp_file
+    return temp_file
 
 # ==============================================================================
 # Main Processing Loop
@@ -90,31 +92,29 @@ for d in range(DAYS_TO_KEEP):
     urma_dpt_dt = f"{valid_date_str} 21:00"
     
     try:
-        # THE FIX: We apply .squeeze().values[::2, ::2] to downsample to 5km resolution!
+        # FIX: Using remove_grib=True and closing xarray datasets to prevent resource leaks
         H_urma_max = Herbie(urma_maxt_dt, model="urma", product="anl")
-        ds_urma_max = H_urma_max.xarray(":TMAX:2 m above ground:", remove_grib=False)
-        urma_tmax_f = (ds_urma_max[list(ds_urma_max.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+        with H_urma_max.xarray(":TMAX:2 m above ground:", remove_grib=True) as ds_urma_max:
+            urma_tmax_f = (ds_urma_max[list(ds_urma_max.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+            lat_grid = ds_urma_max.latitude.squeeze().values[::2, ::2].astype(np.float32)
+            lon_grid = ds_urma_max.longitude.squeeze().values[::2, ::2].astype(np.float32)
         
         H_urma_min = Herbie(urma_mint_dt, model="urma", product="anl")
-        ds_urma_min = H_urma_min.xarray(":TMIN:2 m above ground:", remove_grib=False)
-        urma_tmin_f = (ds_urma_min[list(ds_urma_min.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+        with H_urma_min.xarray(":TMIN:2 m above ground:", remove_grib=True) as ds_urma_min:
+            urma_tmin_f = (ds_urma_min[list(ds_urma_min.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
 
         H_urma_dpt = Herbie(urma_dpt_dt, model="urma", product="anl")
-        ds_urma_dpt = H_urma_dpt.xarray(":DPT:2 m above ground:", remove_grib=False)
-        urma_tdpt_f = (ds_urma_dpt[list(ds_urma_dpt.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
-        
-        # Subsample the coordinate grids too
-        lat_grid = ds_urma_max.latitude.squeeze().values[::2, ::2].astype(np.float32)
-        lon_grid = ds_urma_max.longitude.squeeze().values[::2, ::2].astype(np.float32)
-        
+        with H_urma_dpt.xarray(":DPT:2 m above ground:", remove_grib=True) as ds_urma_dpt:
+            urma_tdpt_f = (ds_urma_dpt[list(ds_urma_dpt.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+            
     except Exception as e:
         print(f"  [!] URMA failed for {date_str}: {e}. Skipping day.")
         continue
         
     daily_diffs = {}
     
-    # 3. Download NBM Leads 1-8
-    for lead in range(1, MAX_LEAD_DAYS + 1):
+    # FIX: Parallelized Downloads 
+    def process_lead(lead):
         lead_hours_max = lead * 24
         lead_hours_min = (lead * 24) + 12
         lead_hours_dpt = (lead * 24) - 9
@@ -122,36 +122,51 @@ for d in range(DAYS_TO_KEEP):
         init_dt = target_dt - pd.Timedelta(days=lead)
         init_dt_str = pd.to_datetime(f"{init_dt.strftime('%Y-%m-%d')} {NBM_CYCLE}")
         
+        results = {}
+        
         # Max T
         try:
-            ds_nbm_max, temp_grib_max = get_nbm_qmd(init_dt_str, lead_hours_max, 'max')
-            nbm_tmax_f = (ds_nbm_max[list(ds_nbm_max.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
-            daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], (nbm_tmax_f - urma_tmax_f).astype(np.float32))
-            ds_nbm_max.close()
+            temp_grib_max = get_nbm_qmd(init_dt_str, lead_hours_max, 'max', http_session)
+            with xr.open_dataset(temp_grib_max, engine='cfgrib') as ds_nbm_max:
+                nbm_tmax_f = (ds_nbm_max[list(ds_nbm_max.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+                assert nbm_tmax_f.shape == urma_tmax_f.shape, "NBM and URMA grid shape mismatch"
+                results[f'lead_{lead}_maxt'] = (['y', 'x'], (nbm_tmax_f - urma_tmax_f).astype(np.float32))
             for f in glob.glob(f"{temp_grib_max}*"): os.remove(f)
-        except Exception: daily_diffs[f'lead_{lead}_maxt'] = (['y', 'x'], np.full(urma_tmax_f.shape, np.nan, dtype=np.float32))
+        except Exception as e: 
+            print(f"    [!] Day {lead} MaxT failed: {e}")
+            results[f'lead_{lead}_maxt'] = (['y', 'x'], np.full(urma_tmax_f.shape, np.nan, dtype=np.float32))
 
         # Min T
         try:
-            ds_nbm_min, temp_grib_min = get_nbm_qmd(init_dt_str, lead_hours_min, 'min')
-            nbm_tmin_f = (ds_nbm_min[list(ds_nbm_min.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
-            daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], (nbm_tmin_f - urma_tmin_f).astype(np.float32))
-            ds_nbm_min.close()
+            temp_grib_min = get_nbm_qmd(init_dt_str, lead_hours_min, 'min', http_session)
+            with xr.open_dataset(temp_grib_min, engine='cfgrib') as ds_nbm_min:
+                nbm_tmin_f = (ds_nbm_min[list(ds_nbm_min.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+                assert nbm_tmin_f.shape == urma_tmin_f.shape, "NBM and URMA grid shape mismatch"
+                results[f'lead_{lead}_mint'] = (['y', 'x'], (nbm_tmin_f - urma_tmin_f).astype(np.float32))
             for f in glob.glob(f"{temp_grib_min}*"): os.remove(f)
-        except Exception: daily_diffs[f'lead_{lead}_mint'] = (['y', 'x'], np.full(urma_tmin_f.shape, np.nan, dtype=np.float32))
+        except Exception as e: 
+            print(f"    [!] Day {lead} MinT failed: {e}")
+            results[f'lead_{lead}_mint'] = (['y', 'x'], np.full(urma_tmin_f.shape, np.nan, dtype=np.float32))
 
         # Dewpoint
         try:
-            ds_nbm_dpt, temp_grib_dpt = get_nbm_qmd(init_dt_str, lead_hours_dpt, 'dpt')
-            nbm_tdpt_f = (ds_nbm_dpt[list(ds_nbm_dpt.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
-            daily_diffs[f'lead_{lead}_dpt'] = (['y', 'x'], (nbm_tdpt_f - urma_tdpt_f).astype(np.float32))
-            ds_nbm_dpt.close()
+            temp_grib_dpt = get_nbm_qmd(init_dt_str, lead_hours_dpt, 'dpt', http_session)
+            with xr.open_dataset(temp_grib_dpt, engine='cfgrib') as ds_nbm_dpt:
+                nbm_tdpt_f = (ds_nbm_dpt[list(ds_nbm_dpt.data_vars)[0]].squeeze().values[::2, ::2] - 273.15) * 9/5 + 32
+                assert nbm_tdpt_f.shape == urma_tdpt_f.shape, "NBM and URMA grid shape mismatch"
+                results[f'lead_{lead}_dpt'] = (['y', 'x'], (nbm_tdpt_f - urma_tdpt_f).astype(np.float32))
             for f in glob.glob(f"{temp_grib_dpt}*"): os.remove(f)
         except Exception as e: 
-            print(f"  [!] Day {lead} DPT missing: {e}")
-            daily_diffs[f'lead_{lead}_dpt'] = (['y', 'x'], np.full(urma_tdpt_f.shape, np.nan, dtype=np.float32))
+            print(f"    [!] Day {lead} DPT failed: {e}")
+            results[f'lead_{lead}_dpt'] = (['y', 'x'], np.full(urma_tdpt_f.shape, np.nan, dtype=np.float32))
 
-        print(f"  -> Day {lead} forecast (Max: +{lead_hours_max}h, Min: +{lead_hours_min}h, Dpt: +{lead_hours_dpt}h) processed.")
+        print(f"  -> Day {lead} forecast processed.")
+        return results
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(process_lead, l) for l in range(1, MAX_LEAD_DAYS + 1)]
+        for future in as_completed(futures):
+            daily_diffs.update(future.result())
 
     # 4. Save to NetCDF
     ds_out = xr.Dataset(
