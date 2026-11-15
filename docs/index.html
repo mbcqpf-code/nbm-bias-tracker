@@ -19,6 +19,7 @@
         .brand-title { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.5px; }
         .brand-subtitle { color: var(--text-muted); font-size: 0.85rem; }
         .badge { background-color: rgba(56, 189, 248, 0.1); color: var(--accent-blue); border: 1px solid var(--accent-blue); padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-muted { background-color: rgba(148, 163, 184, 0.1); color: var(--text-muted); border-color: var(--border-color); }
 
         .tab-bar { display: flex; background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 0 2rem; }
         .tab { padding: 1rem 2rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
@@ -47,6 +48,9 @@
         .viewer-container { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 500px; }
         .image-wrapper { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
         .plot-image { max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: 4px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
+        
+        /* Broken image styling for missing plots */
+        .plot-image[alt]:not([src]), .plot-image[alt][src=""] { padding: 40px; border: 2px dashed var(--border-color); background: var(--bg-card); border-radius: 8px; font-weight: 600; color: var(--text-muted); text-align: center; }
 
         footer { background-color: var(--bg-secondary); border-top: 1px solid var(--border-color); padding: 0.75rem 2rem; text-align: center; font-size: 0.8rem; color: var(--text-muted); }
     </style>
@@ -57,11 +61,12 @@
         <div class="brand">
             <span class="brand-title">NBM vs URMA Verification</span>
             <span class="badge">CONUS</span>
+            <!-- FIX: Added Update Badge -->
+            <span class="badge badge-muted" id="update-badge">Last Updated: Loading...</span>
         </div>
         <div class="brand-subtitle">06z NBM (QMD 50th Percentile) vs URMA Analysis</div>
     </header>
 
-    <!-- Parameter Tabs (Updated to reduce clutter) -->
     <div class="tab-bar">
         <div class="tab active" data-var="maxt">Max Temp</div>
         <div class="tab" data-var="mint">Min Temp</div>
@@ -113,7 +118,8 @@
 
         <section class="viewer-container">
             <div class="image-wrapper">
-                <img id="active-plot" class="plot-image" src="assets/average_plots/day1_5day_maxt.png" alt="NBM Bias Plot">
+                <!-- FIX: Added onerror fallback for missing combinations -->
+                <img id="active-plot" class="plot-image" src="assets/average_plots/day1_5day_maxt.png" alt="Plot not available for this window/lead." onerror="this.onerror=null; this.src='';">
             </div>
         </section>
     </main>
@@ -133,7 +139,12 @@
         const tabs = document.querySelectorAll('.tab');
 
         function updatePlot() {
-            const imagePath = `assets/average_plots/day${currentLead}_${currentWindow}day_${currentVar}.png`;
+            // FIX: Added cache busting to ensure forecasters see the newly generated plots
+            const cacheBust = new Date().toISOString().slice(0, 13); // Cache busts on the hour
+            const imagePath = `assets/average_plots/day${currentLead}_${currentWindow}day_${currentVar}.png?v=${cacheBust}`;
+            
+            // Reset to prevent broken state if it's available
+            activePlot.onerror = function() { this.onerror=null; this.src=''; };
             activePlot.src = imagePath;
 
             leadButtons.forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.lead) === currentLead));
@@ -144,9 +155,10 @@
         }
 
         function preloadAdjacentImages() {
-            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_maxt.png`;
-            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_mint.png`;
-            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_dpt.png`;
+            const cacheBust = new Date().toISOString().slice(0, 13);
+            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_maxt.png?v=${cacheBust}`;
+            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_mint.png?v=${cacheBust}`;
+            new Image().src = `assets/average_plots/day${currentLead}_${currentWindow}day_dpt.png?v=${cacheBust}`;
         }
 
         leadButtons.forEach(btn => btn.addEventListener('click', () => { currentLead = parseInt(btn.dataset.lead); updatePlot(); }));
@@ -154,6 +166,9 @@
         tabs.forEach(tab => tab.addEventListener('click', () => { currentVar = tab.dataset.var; updatePlot(); }));
 
         document.addEventListener('keydown', (e) => {
+            // FIX: Don't trigger if Ctrl/Cmd/Alt is pressed (like switching browser tabs)
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            
             if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) { currentLead = parseInt(e.key); updatePlot(); }
             else if (e.key.toLowerCase() === 'm') { currentVar = currentVar === 'maxt' ? 'mint' : 'maxt'; updatePlot(); }
             else if (e.key.toLowerCase() === 'd') { currentVar = 'dpt'; updatePlot(); }
@@ -168,6 +183,17 @@
                 updatePlot();
             }
         });
+
+        // FIX: Fetch Last Updated time from Python metadata
+        fetch('assets/average_plots/metadata.json?v=' + new Date().getTime())
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('update-badge').textContent = 'Last Updated: ' + data.last_updated_utc;
+            })
+            .catch(err => {
+                console.warn("Could not load metadata.json for update timestamp", err);
+                document.getElementById('update-badge').textContent = 'Last Updated: Unknown';
+            });
     </script>
 </body>
 </html>
